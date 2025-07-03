@@ -12,9 +12,7 @@ class RecordsStore: ObservableObject {
     @Published var intervalHours: Double = 3.0
     private let recordsKey = "records"
     private let intervalKey = "interval"
-
     init() { load() }
-
     func addRecord() {
         records.append(Record(id: UUID(), timestamp: Date()))
         save()
@@ -24,12 +22,10 @@ class RecordsStore: ObservableObject {
         save()
     }
     func updateRecord(_ record: Record, newTimestamp: Date) {
-        if let idx = records.firstIndex(where: { $0.id == record.id }) {
-            records[idx].timestamp = newTimestamp
-            save()
-        }
+        guard let idx = records.firstIndex(where: { $0.id == record.id }) else { return }
+        records[idx].timestamp = newTimestamp
+        save()
     }
-
     private func save() {
         if let data = try? JSONEncoder().encode(records) {
             UserDefaults.standard.set(data, forKey: recordsKey)
@@ -69,7 +65,6 @@ struct RecordsView: View {
     @EnvironmentObject var store: RecordsStore
     @State private var showIntervalSlider = false
     @State private var editingRecord: Record? = nil
-
     private var todayRecords: [Record] {
         store.records.filter { Calendar.current.isDateInToday($0.timestamp) }
     }
@@ -79,11 +74,11 @@ struct RecordsView: View {
         let intervals = zip(recs.dropFirst(), recs).map { Int($0.timestamp.timeIntervalSince($1.timestamp) / 60) }
         return intervals.reduce(0, +) / intervals.count
     }
-
     var body: some View {
         VStack(spacing: 16) {
             Text(Date(), formatter: dateFullFmt)
-                .font(.headline).padding(.top)
+                .font(.headline)
+                .padding(.top)
             Text("建议间隔：\(String(format: "%.1f", store.intervalHours)) 小时")
                 .onTapGesture { showIntervalSlider.toggle() }
             ScrollView {
@@ -111,18 +106,25 @@ struct RecordsView: View {
                let last = todayRecords.sorted(by: { $0.timestamp < $1.timestamp }).last {
                 let nextTime = last.timestamp.addingTimeInterval(TimeInterval(avgMin * 60))
                 Text("推荐下次更换：\(dateTimeFmt.string(from: nextTime))")
-                    .font(.subheadline).padding(.horizontal)
+                    .font(.subheadline)
+                    .padding(.horizontal)
             } else {
                 let nextTime = Date().addingTimeInterval(store.intervalHours * 3600)
                 Text("推荐下次更换：\(dateTimeFmt.string(from: nextTime))")
-                    .font(.subheadline).padding(.horizontal)
+                    .font(.subheadline)
+                    .padding(.horizontal)
             }
             Spacer()
             Button(action: store.addRecord) {
-                Text("记录更换").font(.headline).foregroundColor(.white)
-                    .padding().frame(maxWidth: .infinity)
-                    .background(Color.red).cornerRadius(12)
-                    .padding(.horizontal).padding(.bottom)
+                Text("记录更换")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(Color.red)
+                    .cornerRadius(12)
+                    .padding(.horizontal)
+                    .padding(.bottom)
             }
         }
         .sheet(item: $editingRecord) { rec in
@@ -150,20 +152,30 @@ struct EditRecordView: View {
     @Environment(\.dismiss) var dismiss
     let record: Record
     @State private var newTimestamp: Date
-    init(record: Record) { self.record = record; _newTimestamp = State(initialValue: record.timestamp) }
+    init(record: Record) {
+        self.record = record
+        _newTimestamp = State(initialValue: record.timestamp)
+    }
     var body: some View {
         VStack(spacing: 20) {
-            DatePicker("修改记录时间", selection: $newTimestamp,
-                       in: Calendar.current.startOfDay(for: record.timestamp)...Date(),
-                       displayedComponents: [.date, .hourAndMinute])
-                .datePickerStyle(GraphicalDatePickerStyle())
+            DatePicker(
+                "修改记录时间", selection: $newTimestamp,
+                in: Calendar.current.startOfDay(for: record.timestamp)...Date(),
+                displayedComponents: [.date, .hourAndMinute]
+            )
+            .datePickerStyle(GraphicalDatePickerStyle())
             Button("保存并关闭") {
                 store.updateRecord(record, newTimestamp: newTimestamp)
                 dismiss()
             }
-            .font(.headline).padding().frame(maxWidth: .infinity)
-            .background(Color.blue.opacity(0.7)).foregroundColor(.white).cornerRadius(10)
-        }.padding()
+            .font(.headline)
+            .padding()
+            .frame(maxWidth: .infinity)
+            .background(Color.blue.opacity(0.7))
+            .foregroundColor(.white)
+            .cornerRadius(10)
+        }
+        .padding()
     }
 }
 
@@ -174,18 +186,17 @@ struct CalendarView: View {
     @State private var selectedDate: Date? = nil
     private var calendar: Calendar {
         var cal = Calendar.current
-        cal.firstWeekday = 1
+        cal.firstWeekday = 1 // Sunday
         return cal
     }
     private var weeks: [[Date?]] {
-        let start = currentDate.startOfMonth
-        let range = calendar.range(of: .day, in: .month, for: start)!
-        var days: [Date?] = []
-        let firstWeekday = calendar.component(.weekday, from: start)
-        let offset = (firstWeekday - calendar.firstWeekday + 7) % 7
-        days += Array(repeating: nil, count: offset)
+        let startOfMonth = currentDate.startOfMonth
+        let range = calendar.range(of: .day, in: .month, for: startOfMonth)!
+        let weekdayOfFirst = calendar.component(.weekday, from: startOfMonth)
+        let offset = (weekdayOfFirst - calendar.firstWeekday + 7) % 7
+        var days: [Date?] = Array(repeating: nil, count: offset)
         for day in range {
-            days.append(calendar.date(byAdding: .day, value: day-1, to: start))
+            days.append(calendar.date(byAdding: .day, value: day-1, to: startOfMonth))
         }
         while days.count % 7 != 0 { days.append(nil) }
         return stride(from: 0, to: days.count, by: 7).map { Array(days[$0..<$0+7]) }
@@ -198,7 +209,8 @@ struct CalendarView: View {
                 Text(monthTitle).font(.headline)
                 Spacer()
                 Button { changeMonth(1) } label: { Image(systemName: "chevron.right") }
-            }.padding(.horizontal)
+            }
+            .padding(.horizontal)
             HStack { ForEach(["日","一","二","三","四","五","六"], id: \.self) { Text($0).frame(maxWidth: .infinity) } }
             ForEach(weeks.indices, id: \.self) { row in
                 HStack {
@@ -210,15 +222,24 @@ struct CalendarView: View {
                                     .frame(maxWidth: .infinity)
                                     .onTapGesture { selectedDate = date }
                                 HStack(spacing: 2) {
-                                    ForEach(store.records.filter { Calendar.current.isDateInSameDay($0.timestamp, date) }.prefix(3), id: \.id) { _ in
+                                    ForEach(store.records.filter { calendar.isDate($0.timestamp, inSameDayAs: date) }.prefix(3), id: \.id) { _ in
                                         Image(systemName: "drop.fill").foregroundColor(.red)
                                     }
                                 }
                             } else {
                                 Spacer().frame(maxWidth: .infinity)
                             }
-                        }.padding(4)
-                        .background(selectedDate.map { Calendar.current.isDate($0, inSameDayAs: dateOpt!) } ?? false ? Color.red.opacity(0.2) : Color.clear)
+                        }
+                        .padding(4)
+                        .background(
+                            Group {
+                                if let date = dateOpt, let sel = selectedDate, calendar.isDate(sel, inSameDayAs: date) {
+                                    Color.red.opacity(0.2)
+                                } else {
+                                    Color.clear
+                                }
+                            }
+                        )
                         .cornerRadius(6)
                     }
                 }
@@ -228,7 +249,7 @@ struct CalendarView: View {
                 Text("记录详情：\(monthDetailTitle)\(calendar.component(.day, from: date))日")
                     .font(.headline).padding(.horizontal)
                 VStack(alignment: .leading, spacing: 4) {
-                    ForEach(store.records.filter { Calendar.current.isDate($0.timestamp, inSameDayAs: date) }
+                    ForEach(store.records.filter { calendar.isDate($0.timestamp, inSameDayAs: date) }
                         .sorted(by: { $0.timestamp < $1.timestamp }), id: \.id) { rec in
                         Text(dateTimeFmt.string(from: rec.timestamp))
                     }
@@ -249,5 +270,9 @@ let dateFmt: DateFormatter = { let f = DateFormatter(); f.dateFormat = "HH:mm"; 
 let dateFullFmt: DateFormatter = { let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; return f }()
 let dateTimeFmt: DateFormatter = { let f = DateFormatter(); f.dateFormat = "MM-dd HH:mm"; return f }()
 
-extension Date { var startOfMonth: Date { Calendar.current.date(from: Calendar.current.dateComponents([.year, .month], from: self))! } }
-extension Calendar { func isDateInSameDay(_ date1: Date, _ date2: Date) -> Bool { isDate(date1, inSameDayAs: date2) } }
+extension Date {
+    var startOfMonth: Date { Calendar.current.date(from: Calendar.current.dateComponents([.year, .month], from: self))! }
+}
+extension Calendar {
+    func isDateInSameDay(_ date1: Date, _ date2: Date) -> Bool { isDate(date1, inSameDayAs: date2) }
+}
